@@ -2,10 +2,12 @@ module github.com/Cyber-Def/postq-tunnel
 
 go 1.26.0
 
-require github.com/hashicorp/yamux v0.1.1
+require (
+	github.com/caddyserver/certmagic v0.25.2
+	github.com/hashicorp/yamux v0.1.1
+)
 
 require (
-	github.com/caddyserver/certmagic v0.25.2 // indirect
 	github.com/caddyserver/zerossl v0.1.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/libdns/libdns v1.1.1 // indirect
