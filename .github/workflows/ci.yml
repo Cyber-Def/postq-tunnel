@@ -1,0 +1,34 @@
+name: Go CI Build
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod' # Ensures github uses Go 1.26+ based on your go.mod
+
+    - name: Display Go version
+      run: go version
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Ensure dependency files are tidy
+      run: go mod tidy && git diff --exit-code go.mod go.sum || (echo "go.mod/go.sum not tidy" && exit 1)
+
+    - name: Build Agent (qtun)
+      run: go build -v -o qtun ./cmd/qtun/main.go
+
+    - name: Build Server (qtunnel)
+      run: go build -v -o qtunnel ./cmd/server/main.go

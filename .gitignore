@@ -1,0 +1,30 @@
+# Compiled binaries
+qtun
+qtunnel
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build/test outputs
+*.test
+*.out
+cover.out
+
+# Dependency directories
+vendor/
+
+# macOS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# IDE / Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
