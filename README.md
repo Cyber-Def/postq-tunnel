@@ -1,6 +1,6 @@
 # PostQ-Tunnel
 
-[🇺🇦 Українська](docs/uk/1_INSTALL.md) | [🇬🇧 English](docs/en/1_INSTALL.md) | [🇩🇪 Deutsch](docs/de/1_INSTALL.md) | [🇨🇳 中文](docs/zh/1_INSTALL.md) | [🇷🇺 Русский](docs/ru/1_INSTALL.md) 
+[Українська](docs/uk/1_INSTALL.md) | [English](docs/en/1_INSTALL.md) | [Deutsch](docs/de/1_INSTALL.md) | [中文](docs/zh/1_INSTALL.md) | [Русский](docs/ru/1_INSTALL.md) 
 
 A modern, highly secure, Quantum-Resistant reverse proxy designed to expose your local development and AI agents automation services to the internet. 
 
