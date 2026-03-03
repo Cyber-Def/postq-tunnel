@@ -16,6 +16,9 @@ type TunnelRegistry interface {
 	
 	// OpenStream opens a new logical connection in the session to route HTTP requests.
 	OpenStream(subdomain string) (net.Conn, error)
+	
+	// TunnelCount returns the number of active tunneled agents.
+	TunnelCount() int
 }
 
 // Authenticator validates tunnel creation requests based on predefined team/user tokens.
