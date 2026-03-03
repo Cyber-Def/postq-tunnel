@@ -1,4 +1,5 @@
 # PostQ-Tunnel
+[![Go CI Build](https://github.com/Cyber-Def/postq-tunnel/actions/workflows/ci.yml/badge.svg)](https://github.com/Cyber-Def/postq-tunnel/actions/workflows/ci.yml)
 
 [Українська](docs/uk/1_INSTALL.md) | [English](docs/en/1_INSTALL.md) | [Deutsch](docs/de/1_INSTALL.md) | [中文](docs/zh/1_INSTALL.md) | [Русский](docs/ru/1_INSTALL.md) 
 
