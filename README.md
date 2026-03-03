@@ -35,7 +35,7 @@ export QTUN_EMAIL="admin@yourdomain.com"
 ```
 The server will bind to `443` holding CertMagic domains, `4443` for accepting PQC client agents, and `9090` for prometheus metrics.
 
-### Running Client Agent (Developer Laptop)
+### Running Client Agent
 
 ```bash
 # Expose your local port 3000 to the domain react-preview.tunnels.yourdomain.com
