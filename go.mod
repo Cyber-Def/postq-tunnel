@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/caddyserver/certmagic v0.25.2
-	github.com/hashicorp/yamux v0.1.1
+	github.com/hashicorp/yamux v0.1.2
 )
 
 require (
