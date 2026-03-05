@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Cyber-Def/postq-tunnel/internal/core"
+	"github.com/Cyber-Def/postq-tunnel/internal/version"
 	"github.com/Cyber-Def/postq-tunnel/pkg/tunnel"
 )
 
@@ -30,8 +31,13 @@ func ParseFlags() *Config {
 	flag.StringVar(&cfg.LocalTarget, "local", "localhost:8080", "Local service to expose")
 	flag.StringVar(&cfg.AllowCIDRs, "allow-ip", "", "Comma-separated CIDRs to whitelist (e.g., '192.168.1.0/24')")
 	authFull := flag.String("auth", "", "Basic Auth in format 'user:pass'")
+	v := flag.Bool("version", false, "Print version information")
 	
 	flag.Parse()
+	
+	if *v {
+		version.PrintBanner("qtun (Agent)")
+	}
 	
 	if *authFull != "" {
 		parts := strings.SplitN(*authFull, ":", 2)

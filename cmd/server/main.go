@@ -11,14 +11,23 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"flag"
 
 	"github.com/caddyserver/certmagic"
 	"github.com/Cyber-Def/postq-tunnel/internal/core"
 	"github.com/Cyber-Def/postq-tunnel/internal/server"
+	"github.com/Cyber-Def/postq-tunnel/internal/version"
 	"github.com/Cyber-Def/postq-tunnel/pkg/tunnel"
 )
 
 func main() {
+	v := flag.Bool("version", false, "Print version information")
+	flag.Parse()
+
+	if *v {
+		version.PrintBanner("qtunnel (Edge Server)")
+	}
+
 	fmt.Println("PostQ-Tunnel Edge Server starting (PQC-Ready)...")
 	
 	registry := server.NewRegistry()
