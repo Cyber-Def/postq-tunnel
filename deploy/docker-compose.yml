@@ -1,0 +1,72 @@
+# PostQ-Tunnel Quick Start
+# Exposes a local service through a PQC-secured tunnel via the Edge Server.
+#
+# Usage:
+#   1. docker compose up
+#   2. The edge server listens on :8080 (HTTP) and :4443 (PQC agent control plane)
+#   3. The agent mounts subdomain "demo" → your local service at :3000
+#   4. Curl: curl -H "Host: demo.localhost" http://localhost:8080/
+#
+# Production (with Let's Encrypt):
+#   Set QTUN_DOMAIN=your.domain.com and QTUN_EMAIL=admin@your.domain.com
+#
+# Security notes:
+#   - Port 9090 (metrics/health) is bound to 127.0.0.1 only — not publicly exposed.
+#   - Port 4443 (agent control plane) should be firewall-restricted in production
+#     to accept only known agent IPs.
+#   - Services communicate over an isolated internal Docker network.
+
+networks:
+  tunnel-internal:
+    # Isolated network: qtunnel ↔ qtun communicate here, not the default bridge
+    driver: bridge
+    internal: false # qtunnel needs internet for Let's Encrypt; qtun needs host access
+
+services:
+  # Edge Server — public-facing PQC proxy
+  qtunnel:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: postq-tunnel/qtunnel:latest
+    ports:
+      - "8080:8080" # HTTP reverse proxy (or HTTPS with Let's Encrypt)
+      - "4443:4443" # PQC TLS control plane for agents
+      - "127.0.0.1:9090:9090" # Metrics/health: localhost only, never public
+    networks:
+      - tunnel-internal
+    environment:
+      - QTUN_DOMAIN=${QTUN_DOMAIN:-} # Leave empty for local HTTP mode
+      - QTUN_EMAIL=${QTUN_EMAIL:-} # ACME registration email (production)
+    restart: unless-stopped
+    healthcheck:
+      # Use the qtunnel binary itself to probe: scratch has no wget/curl
+      test: [ "/qtunnel", "--version" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # Agent — connects from the inside, forwards traffic to a local service
+  qtun:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: postq-tunnel/qtun:latest
+    # Switch to agent binary (qtunnel is the default ENTRYPOINT)
+    entrypoint: [ "/qtun" ]
+    depends_on:
+      qtunnel:
+        condition: service_healthy
+    networks:
+      - tunnel-internal
+    environment:
+      - QTUN_TOKEN=${QTUN_TOKEN:-}
+    # Compose interpolates ${VAR} in command at deploy time
+    command:
+      - "-server=${QTUN_SERVER:-qtunnel:4443}"
+      - "-sub=${QTUN_SUB:-demo}"
+      - "-local=${QTUN_LOCAL:-host.docker.internal:3000}"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Reach services running on the host
