@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"syscall"
 	"time"
 	"flag"
@@ -18,6 +19,7 @@ import (
 	"github.com/Cyber-Def/postq-tunnel/internal/version"
 	"github.com/Cyber-Def/postq-tunnel/pkg/logger"
 	"github.com/Cyber-Def/postq-tunnel/pkg/metrics"
+	"github.com/Cyber-Def/postq-tunnel/pkg/ratelimit"
 	"github.com/Cyber-Def/postq-tunnel/pkg/tunnel"
 )
 
@@ -91,12 +93,17 @@ func main() {
 	time.Sleep(1 * time.Second) // allow final bytes transmission
 }
 
+// subdomainRegex validates subdomain names: only lowercase letters, digits, hyphens; max 63 chars.
+var subdomainRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9\-]{0,61}[a-z0-9]$|^[a-z0-9]$`)
+
 func startPQCListener(ctx context.Context, addr string, registry core.TunnelRegistry) {
-	l, err := tunnel.ListenPQC(addr, nil) 
+	l, err := tunnel.ListenPQC(addr, nil)
 	if err != nil {
 		logger.Fatal("Failed to start PQC listener", "error", err)
 	}
 	slog.Info("PQC Transport running for local agents", "addr", addr)
+
+	limiter := ratelimit.NewHandshakeLimiter()
 
 	go func() {
 		<-ctx.Done()
@@ -109,6 +116,12 @@ func startPQCListener(ctx context.Context, addr string, registry core.TunnelRegi
 			if ctx.Err() != nil {
 				return
 			}
+			continue
+		}
+		// Drop connections exceeding per-IP rate limit before any TLS handshake
+		if !limiter.Allow(conn.RemoteAddr().String()) {
+			metrics.AddNetError()
+			conn.Close()
 			continue
 		}
 		go handleAgentConnection(ctx, conn, registry)
@@ -156,6 +169,13 @@ func handleAgentConnection(ctx context.Context, conn net.Conn, registry core.Tun
 	
 	if req.Version != core.ProtocolVersion {
 		_ = core.WriteHandshakeResp(stream, core.HandshakeResp{Success: false, Error: "Unsupported protocol version"})
+		session.Close()
+		return
+	}
+
+	// Strict subdomain validation: only DNS-safe labels to prevent injection/weird routing
+	if !subdomainRegex.MatchString(req.Subdomain) {
+		_ = core.WriteHandshakeResp(stream, core.HandshakeResp{Success: false, Error: "Invalid subdomain: use only a-z, 0-9, hyphens (max 63 chars)"})
 		session.Close()
 		return
 	}
