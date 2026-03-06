@@ -30,6 +30,11 @@ jobs:
     - name: Run Tests
       run: go test -v -race ./...
 
+    - name: Run Fuzz Tests (seed corpus only in CI)
+      run: |
+        go test -run=FuzzReadHandshake ./internal/core/
+        go test -run=FuzzWriteReadRoundtrip ./internal/core/
+
     - name: Run GolangCI-Lint
       run: |
         go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
