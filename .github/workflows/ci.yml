@@ -27,6 +27,20 @@ jobs:
     - name: Ensure dependency files are tidy
       run: go mod tidy && git diff --exit-code go.mod go.sum || (echo "go.mod/go.sum not tidy" && exit 1)
 
+    - name: Run Tests
+      run: go test -v -race ./...
+
+    - name: Run GolangCI-Lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: latest
+        args: --timeout=5m
+
+    - name: Run Govulncheck
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        govulncheck ./...
+
     - name: Build Agent (qtun)
       run: go build -v -o qtun ./cmd/qtun/main.go
 
