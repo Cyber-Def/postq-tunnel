@@ -5,8 +5,13 @@ import (
 	"io"
 )
 
+// ProtocolVersion is embedded in all handshakes to ensure client-server compatibility.
+// If the structural communication model changes significantly, we bump this.
+const ProtocolVersion = "v1"
+
 // HandshakeReq is sent by the qtun agent to the server over the designated auth stream.
 type HandshakeReq struct {
+	Version   string `json:"version"`
 	Subdomain string `json:"subdomain"`
 	Token     string `json:"token"`
 	
@@ -29,7 +34,9 @@ func WriteHandshake(w io.Writer, req HandshakeReq) error {
 
 func ReadHandshake(r io.Reader) (HandshakeReq, error) {
 	var req HandshakeReq
-	err := json.NewDecoder(r).Decode(&req)
+	// Cap handshake reads at 4KB to prevent JSON memory exhaustion attacks
+	limitedReader := io.LimitReader(r, 4096)
+	err := json.NewDecoder(limitedReader).Decode(&req)
 	return req, err
 }
 

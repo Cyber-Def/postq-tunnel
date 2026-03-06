@@ -20,10 +20,11 @@ We assume the following attacker capabilities:
 
 ## 3. Security Properties & Mitigations
 
-### 3.1 Post-Quantum Cryptography (PQC)
+### 3.1 Post-Quantum Cryptography (PQC) & Crypto-Hygiene
 To defend against SNDL (Store Now, Decrypt Later) attacks, PostQ-Tunnel enforces:
-- **Hybrid Key Exchange**: TLS connections are established using `X25519MLKEM768`. It combines the heavily audited classical `X25519` elliptic curve with the standardized lattice-based `ML-KEM-768` (Kyber).
-- **Forward Secrecy**: Temporary session keys are derived using standard TLS 1.3 key derivation functions and are strictly meant to be zeroized from memory post-session.
+- **Hybrid Key Exchange (KEM & Parameters)**: TLS connections are established using `X25519MLKEM768`. It combines the heavily audited classical `X25519` elliptic curve with the standardized lattice-based `ML-KEM-768` (Kyber).
+- **Key Schedule & Zeroing Memory**: To minimize cryptographic surface area and complexity, PostQ-Tunnel intentionally avoids rolling a custom cryptographic key-schedule or manual memory zeroization (which is highly volatile with Go's Garbage Collector). Instead, all ephemeral key generation, derivation, and memory erasure (zeroing) are strictly delegated to standard Go 1.24+ `crypto/tls` internals, inheriting robust upstream security auditing.
+- **Forward Secrecy**: Temporary session keys are derived using standard TLS 1.3 key derivation functions and are automatically discarded post-session.
 
 ### 3.2 DoS and Resource Exhaustion
 - **Multiplexer Constraints**: We rely on Yamux for multiplexing. It is constrained directly by configuration blocks limiting `MaxStreamWindowSize = 1MB` and `StreamCloseTimeout = 5m`. 

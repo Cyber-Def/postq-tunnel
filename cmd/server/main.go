@@ -154,6 +154,12 @@ func handleAgentConnection(ctx context.Context, conn net.Conn, registry core.Tun
 	
 	metrics.ObserveHandshake(time.Since(start).Milliseconds())
 	
+	if req.Version != core.ProtocolVersion {
+		_ = core.WriteHandshakeResp(stream, core.HandshakeResp{Success: false, Error: "Unsupported protocol version"})
+		session.Close()
+		return
+	}
+	
 	// Reset deadlines for multiplexed streams
 	_ = stream.SetDeadline(time.Time{})
 	_ = conn.SetDeadline(time.Time{})

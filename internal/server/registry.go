@@ -7,6 +7,10 @@ import (
 	"github.com/hashicorp/yamux"
 )
 
+// MaxTunnels is the maximum number of concurrent agent tunnels allowed.
+// Protects against resource exhaustion without impacting normal usage.
+const MaxTunnels = 100
+
 // Registry implements core.TunnelRegistry in-memory
 type Registry struct {
 	mu      sync.RWMutex
@@ -22,6 +26,9 @@ func NewRegistry() *Registry {
 func (r *Registry) Register(subdomain string, session *yamux.Session) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if len(r.tunnels) >= MaxTunnels {
+		return errors.New("server tunnel capacity reached, try again later")
+	}
 	if _, exists := r.tunnels[subdomain]; exists {
 		return errors.New("subdomain is already occupied")
 	}

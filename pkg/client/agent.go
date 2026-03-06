@@ -91,6 +91,7 @@ func RunTunnel(ctx context.Context, cfg *Config) error {
 	}
 
 	req := core.HandshakeReq{
+		Version:      core.ProtocolVersion,
 		Subdomain:    cfg.Subdomain,
 		Token:        cfg.Token,
 		AllowCIDRs:   cidrs,
