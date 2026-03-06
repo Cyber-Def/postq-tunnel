@@ -62,10 +62,7 @@ func (rl *HandshakeLimiter) Allow(addr string) bool {
 	}
 
 	entry.count++
-	if entry.count > MaxHandshakesPerSecond {
-		return false
-	}
-	return true
+	return entry.count <= MaxHandshakesPerSecond
 }
 
 // cleanup periodically removes stale entries to prevent unbounded memory growth.
