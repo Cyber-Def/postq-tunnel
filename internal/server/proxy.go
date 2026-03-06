@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -28,7 +28,7 @@ func BuildProxy(registry core.TunnelRegistry) *httputil.ReverseProxy {
 
 			stream, err := registry.OpenStream(subdomain)
 			if err != nil {
-				log.Printf("[Proxy Error] %s: %v", subdomain, err)
+				slog.Error("Proxy Error", "subdomain", subdomain, "error", err)
 				return nil, err
 			}
 			return stream, nil

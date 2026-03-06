@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"strings"
@@ -50,7 +50,8 @@ func ParseFlags() *Config {
 	}
 	
 	if cfg.Subdomain == "" {
-		log.Fatal("Fatal: Subdomain is required (-sub)")
+		slog.Error("Subdomain is required (-sub)")
+		os.Exit(1)
 	}
 	return cfg
 }
@@ -104,7 +105,7 @@ func RunTunnel(ctx context.Context, cfg *Config) error {
 	resp, err := core.ReadHandshakeResp(handshakeStream)
 	if err != nil || !resp.Success {
 		if err == nil {
-			log.Printf("Server rejected request: %s", resp.Error)
+			slog.Error("Server rejected request", "error", resp.Error)
 		}
 		os.Exit(1) // Exit process immediately if explicitly rejected by server logic (Auth, Domain Taken)
 	}
@@ -113,7 +114,7 @@ func RunTunnel(ctx context.Context, cfg *Config) error {
 	handshakeStream.SetDeadline(time.Time{})
 	handshakeStream.Close()
 
-	log.Printf("✅ Tunnel Established! Public URL mounted at subdomain '%s'", resp.AssignedURL)
+	slog.Info("✅ Tunnel Established!", "url", resp.AssignedURL)
 
 	// 4. Infinite Loop: Wait for HTTP streams pushed by Edge Server and pipe them locally
 	for {
@@ -134,7 +135,7 @@ func proxyLocal(ctx context.Context, remoteStream net.Conn, localTarget string) 
 	// We connect to the localhost node app or DB
 	localConn, err := net.Dial("tcp", localTarget)
 	if err != nil {
-		log.Printf("Failed to dial local agent service %s: %v", localTarget, err)
+		slog.Error("Failed to dial local agent service", "target", localTarget, "error", err)
 		return
 	}
 	defer localConn.Close()

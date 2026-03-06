@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -17,6 +17,7 @@ import (
 	"github.com/Cyber-Def/postq-tunnel/internal/core"
 	"github.com/Cyber-Def/postq-tunnel/internal/server"
 	"github.com/Cyber-Def/postq-tunnel/internal/version"
+	"github.com/Cyber-Def/postq-tunnel/pkg/logger"
 	"github.com/Cyber-Def/postq-tunnel/pkg/tunnel"
 )
 
@@ -28,7 +29,8 @@ func main() {
 		version.PrintBanner("qtunnel (Edge Server)")
 	}
 
-	fmt.Println("PostQ-Tunnel Edge Server starting (PQC-Ready)...")
+	logger.InitLogger()
+	slog.Info("PostQ-Tunnel Edge Server starting (PQC-Ready)...")
 	
 	registry := server.NewRegistry()
 	proxy := server.BuildProxy(registry)
@@ -55,17 +57,17 @@ func main() {
 	// 4. Run Edge Proxy
 	domain := os.Getenv("QTUN_DOMAIN")
 	if domain == "" {
-		log.Println("No QTUN_DOMAIN set. Starting local HTTP fallback proxy on :8080...")
+		slog.Info("No QTUN_DOMAIN set. Starting local HTTP fallback proxy on :8080...")
 		
 		srv := &http.Server{Addr: ":8080", Handler: proxy}
 		go func() {
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Proxy error: %v", err)
+				logger.Fatal("Proxy error", "error", err)
 			}
 		}()
 		
 		<-ctx.Done()
-		log.Println("Shutting down Edge Server gracefully...")
+		slog.Info("Shutting down Edge Server gracefully...")
 		srv.Shutdown(context.Background())
 		return
 	}
@@ -74,26 +76,26 @@ func main() {
 	certmagic.DefaultACME.Email = os.Getenv("QTUN_EMAIL")
 	certmagic.DefaultACME.Agreed = true
 
-	log.Printf("Starting Automatic TLS edge proxy for *. %s", domain)
+	slog.Info("Starting Automatic TLS edge proxy", "domain", domain)
 	
 	go func() {
 		err := certmagic.HTTPS([]string{domain}, proxy)
 		if err != nil {
-			log.Fatalf("CertMagic fatal error: %v", err)
+			logger.Fatal("CertMagic fatal error", "error", err)
 		}
 	}()
 
 	<-ctx.Done()
-	log.Println("Shutting down Edge Proxy Server gracefully. Closing all agent tunnels...")
+	slog.Info("Shutting down Edge Proxy Server gracefully. Closing all agent tunnels...")
 	time.Sleep(1 * time.Second) // allow final bytes transmission
 }
 
 func startPQCListener(ctx context.Context, addr string, registry core.TunnelRegistry) {
 	l, err := tunnel.ListenPQC(addr, nil) 
 	if err != nil {
-		log.Fatalf("Failed to start PQC listener: %v", err)
+		logger.Fatal("Failed to start PQC listener", "error", err)
 	}
-	log.Printf("PQC Transport running for local agents on %s", addr)
+	slog.Info("PQC Transport running for local agents", "addr", addr)
 
 	go func() {
 		<-ctx.Done()
@@ -159,11 +161,11 @@ func handleAgentConnection(ctx context.Context, conn net.Conn, registry core.Tun
 	}
 	
 	_ = core.WriteHandshakeResp(stream, core.HandshakeResp{Success: true, AssignedURL: req.Subdomain})
-	log.Printf("[Subdomain Mounted] %s (Total active: %d)", req.Subdomain, registry.TunnelCount())
+	slog.Info("Subdomain Mounted", "subdomain", req.Subdomain, "active_tunnels", registry.TunnelCount())
 	
 	go func() {
 		<-session.CloseChan()
 		registry.Unregister(req.Subdomain)
-		log.Printf("[Subdomain Unmounted] %s (Total active: %d)", req.Subdomain, registry.TunnelCount())
+		slog.Info("Subdomain Unmounted", "subdomain", req.Subdomain, "active_tunnels", registry.TunnelCount())
 	}()
 }

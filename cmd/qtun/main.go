@@ -2,19 +2,21 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/Cyber-Def/postq-tunnel/pkg/client"
+	"github.com/Cyber-Def/postq-tunnel/pkg/logger"
 )
 
 func main() {
+	logger.InitLogger()
 	cfg := client.ParseFlags()
 	
-	log.Printf("Starting qtun agent. Targeting local port: %s", cfg.LocalTarget)
+	slog.Info("Starting qtun agent", "target", cfg.LocalTarget)
 	
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -25,24 +27,24 @@ func main() {
 
 	for {
 		if ctx.Err() != nil {
-			log.Println("Context cancelled, shutting down gracefully.")
+			slog.Info("Context cancelled, shutting down gracefully.")
 			break
 		}
 
 		err := client.RunTunnel(ctx, cfg)
 		if err != nil {
-			log.Printf("Tunnel transport dropped/failed: %v", err)
+			slog.Error("Tunnel transport dropped/failed", "error", err)
 		} else {
-			log.Println("Tunnel gracefully closed by manual termination.")
+			slog.Info("Tunnel gracefully closed by manual termination.")
 			break
 		}
 
-		log.Printf("Reconnecting to Edge Server in %v...", backoff)
+		slog.Info("Reconnecting to Edge Server...", "backoff", backoff)
 		
 		select {
 		case <-time.After(backoff):
 		case <-ctx.Done():
-			log.Println("Context cancelled during backoff, shutting down.")
+			slog.Info("Context cancelled during backoff, shutting down.")
 			return
 		}
 		
