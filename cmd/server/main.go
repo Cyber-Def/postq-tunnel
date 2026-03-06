@@ -45,12 +45,12 @@ func main() {
 	// Start metrics endpoint quietly on 9090
 	go http.ListenAndServe(":9090", metricsMux)
 
-	// 2. Start the PQC control plane for connecting agents
-	go startPQCListener(":4443", registry)
-
 	// 3. Graceful Shutdown Context
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// 2. Start the PQC control plane for connecting agents
+	go startPQCListener(ctx, ":4443", registry)
 
 	// 4. Run Edge Proxy
 	domain := os.Getenv("QTUN_DOMAIN")
@@ -88,25 +88,41 @@ func main() {
 	time.Sleep(1 * time.Second) // allow final bytes transmission
 }
 
-func startPQCListener(addr string, registry core.TunnelRegistry) {
+func startPQCListener(ctx context.Context, addr string, registry core.TunnelRegistry) {
 	l, err := tunnel.ListenPQC(addr, nil) 
 	if err != nil {
 		log.Fatalf("Failed to start PQC listener: %v", err)
 	}
 	log.Printf("PQC Transport running for local agents on %s", addr)
 
+	go func() {
+		<-ctx.Done()
+		l.Close()
+	}()
+
 	for {
 		conn, err := l.Accept()
 		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
 			continue
 		}
-		go handleAgentConnection(conn, registry)
+		go handleAgentConnection(ctx, conn, registry)
 	}
 }
 
-func handleAgentConnection(conn net.Conn, registry core.TunnelRegistry) {
+func handleAgentConnection(ctx context.Context, conn net.Conn, registry core.TunnelRegistry) {
+	// Connection and handshake timeout (10 seconds)
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+
 	tlsConn, ok := conn.(*tls.Conn)
 	if !ok {
+		conn.Close()
+		return
+	}
+
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		conn.Close()
 		return
 	}
@@ -123,12 +139,18 @@ func handleAgentConnection(conn net.Conn, registry core.TunnelRegistry) {
 		return
 	}
 	
+	// Stream handshake limit
+	stream.SetDeadline(time.Now().Add(5 * time.Second))
 	req, err := core.ReadHandshake(stream)
 	if err != nil {
 		session.Close()
 		return
 	}
 	
+	// Reset deadlines for multiplexed streams
+	stream.SetDeadline(time.Time{})
+	conn.SetDeadline(time.Time{})
+
 	err = registry.Register(req.Subdomain, session)
 	if err != nil {
 		_ = core.WriteHandshakeResp(stream, core.HandshakeResp{Success: false, Error: err.Error()})

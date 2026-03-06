@@ -1,12 +1,14 @@
 package client
 
 import (
+	"context"
 	"flag"
 	"io"
 	"log"
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Cyber-Def/postq-tunnel/internal/core"
 	"github.com/Cyber-Def/postq-tunnel/internal/version"
@@ -53,9 +55,12 @@ func ParseFlags() *Config {
 	return cfg
 }
 
-func RunTunnel(cfg *Config) error {
+func RunTunnel(ctx context.Context, cfg *Config) error {
 	// 1. Dial Edge Server using PQC TLS (tls.X25519MLKEM768)
-	tlsConn, err := tunnel.DialPQC(cfg.ServerAddr, true) // insecureSkipVerify for typical agent-server connection
+	dialCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	tlsConn, err := tunnel.DialPQC(dialCtx, cfg.ServerAddr, true) // insecureSkipVerify for typical agent-server connection
 	if err != nil {
 		return err
 	}
@@ -73,6 +78,9 @@ func RunTunnel(cfg *Config) error {
 	if err != nil {
 		return err
 	}
+
+	// Apply handshake timeout
+	handshakeStream.SetDeadline(time.Now().Add(10 * time.Second))
 
 	var cidrs []string
 	if cfg.AllowCIDRs != "" {
@@ -100,6 +108,10 @@ func RunTunnel(cfg *Config) error {
 		}
 		os.Exit(1) // Exit process immediately if explicitly rejected by server logic (Auth, Domain Taken)
 	}
+	
+	// Reset deadline for normal operation
+	handshakeStream.SetDeadline(time.Time{})
+	handshakeStream.Close()
 
 	log.Printf("✅ Tunnel Established! Public URL mounted at subdomain '%s'", resp.AssignedURL)
 
@@ -111,12 +123,12 @@ func RunTunnel(cfg *Config) error {
 			return err
 		}
 		
-		go proxyLocal(stream, cfg.LocalTarget)
+		go proxyLocal(ctx, stream, cfg.LocalTarget)
 	}
 }
 
 // proxyLocal pipes raw TCP bytes between the incoming server stream and local dev service
-func proxyLocal(remoteStream net.Conn, localTarget string) {
+func proxyLocal(ctx context.Context, remoteStream net.Conn, localTarget string) {
 	defer remoteStream.Close()
 
 	// We connect to the localhost node app or DB
@@ -126,6 +138,15 @@ func proxyLocal(remoteStream net.Conn, localTarget string) {
 		return
 	}
 	defer localConn.Close()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go func() {
+		<-ctx.Done()
+		localConn.Close()
+		remoteStream.Close()
+	}()
 
 	// Bidirectional byte streaming
 	errc := make(chan error, 2)

@@ -31,4 +31,5 @@ vendor/
 
 release/*
 
+tasks/
 tasks/*

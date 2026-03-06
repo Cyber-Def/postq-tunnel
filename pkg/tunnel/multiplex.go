@@ -2,6 +2,8 @@ package tunnel
 
 import (
 	"crypto/tls"
+	"time"
+
 	"github.com/hashicorp/yamux"
 )
 
@@ -10,6 +12,8 @@ import (
 func ServerSession(conn *tls.Conn) (*yamux.Session, error) {
 	cfg := yamux.DefaultConfig()
 	cfg.EnableKeepAlive = true
+	cfg.MaxStreamWindowSize = 1 * 1024 * 1024 // 1MB per stream to prevent OOM
+	cfg.StreamCloseTimeout = 5 * time.Minute // Prevent hanging streams
 	return yamux.Server(conn, cfg)
 }
 
@@ -18,5 +22,7 @@ func ServerSession(conn *tls.Conn) (*yamux.Session, error) {
 func ClientSession(conn *tls.Conn) (*yamux.Session, error) {
 	cfg := yamux.DefaultConfig()
 	cfg.EnableKeepAlive = true
+	cfg.MaxStreamWindowSize = 1 * 1024 * 1024
+	cfg.StreamCloseTimeout = 5 * time.Minute
 	return yamux.Client(conn, cfg)
 }

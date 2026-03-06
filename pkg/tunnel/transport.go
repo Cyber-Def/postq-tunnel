@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 )
@@ -28,8 +29,19 @@ func ListenPQC(addr string, cert *tls.Certificate) (net.Listener, error) {
 }
 
 // DialPQC connects to a Quantum-Resistant TLS server
-func DialPQC(addr string, insecureSkipVerify bool) (*tls.Conn, error) {
+func DialPQC(ctx context.Context, addr string, insecureSkipVerify bool) (*tls.Conn, error) {
 	cfg := DefaultTLSConfig(nil)
 	cfg.InsecureSkipVerify = insecureSkipVerify // Useful for local dev with self-signed certs
-	return tls.Dial("tcp", addr, cfg)
+	
+	dialer := &tls.Dialer{
+		NetDialer: &net.Dialer{},
+		Config:    cfg,
+	}
+	
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	
+	return conn.(*tls.Conn), nil
 }
