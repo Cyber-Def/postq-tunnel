@@ -1,0 +1,66 @@
+version: 2
+project_name: postq-tunnel
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: qtun
+    main: ./cmd/qtun/main.go
+    binary: qtun
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: qtunnel
+    main: ./cmd/server/main.go
+    binary: qtunnel
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+signs:
+  - artifacts: checksum
+    cmd: cosign
+    args:
+      - sign-blob
+      - '--yes'
+      - '${artifact}'
+      - '--output-signature'
+      - '${signature}'
+      - '--output-certificate'
+      - '${certificate}'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
