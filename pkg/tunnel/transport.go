@@ -2,9 +2,44 @@ package tunnel
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
 	"net"
+	"time"
 )
+
+// GenerateDummyCert creates a quick self-signed certificate for local development
+func GenerateDummyCert() *tls.Certificate {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Local Dev"},
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(time.Hour * 24 * 365),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		panic(err)
+	}
+	cert := tls.Certificate{
+		Certificate: [][]byte{derBytes},
+		PrivateKey:  priv,
+	}
+	return &cert
+}
 
 // DefaultTLSConfig returns the strict Post-Quantum TLS 1.3 configuration
 func DefaultTLSConfig(cert *tls.Certificate) *tls.Config {
@@ -19,6 +54,10 @@ func DefaultTLSConfig(cert *tls.Certificate) *tls.Config {
 	}
 	if cert != nil {
 		cfg.Certificates = []tls.Certificate{*cert}
+	} else {
+		// Fallback for local HTTP development servers with empty QTUN_DOMAIN
+		dummy := GenerateDummyCert()
+		cfg.Certificates = []tls.Certificate{*dummy}
 	}
 	return cfg
 }
