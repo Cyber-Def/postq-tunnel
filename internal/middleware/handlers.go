@@ -2,9 +2,12 @@ package middleware
 
 import (
 	"crypto/subtle"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/Cyber-Def/postq-tunnel/pkg/ratelimit"
 )
 
 // IPWhitelistMiddleware enforces connection only from allowed CIDR blocks/IPs
@@ -44,11 +47,25 @@ func IPWhitelistMiddleware(allowedCIDRs []*net.IPNet, next http.Handler) http.Ha
 	})
 }
 
-// BasicAuthMiddleware enforces HTTP Basic Auth
-func BasicAuthMiddleware(expectedUser, expectedPass string, next http.Handler) http.Handler {
+// BasicAuthMiddleware enforces HTTP Basic Auth with brute-force lockout.
+// The AuthFailLimiter blocks IPs that exceed the failure threshold.
+func BasicAuthMiddleware(expectedUser, expectedPass string, limiter *ratelimit.AuthFailLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if expectedUser == "" && expectedPass == "" {
 			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Extract client IP for rate limiting
+		clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			clientIP = r.RemoteAddr
+		}
+
+		// Check if this IP is currently locked out from too many failures
+		if limiter.IsBlocked(clientIP) {
+			slog.Warn("Basic Auth: IP blocked due to too many failures", "ip", clientIP)
+			http.Error(w, "Too Many Requests: temporarily locked out", http.StatusTooManyRequests)
 			return
 		}
 
@@ -58,6 +75,7 @@ func BasicAuthMiddleware(expectedUser, expectedPass string, next http.Handler) h
 		passMatch := subtle.ConstantTimeCompare([]byte(pass), []byte(expectedPass)) == 1
 
 		if !ok || !userMatch || !passMatch {
+			limiter.RecordFailure(clientIP)
 			w.Header().Set("WWW-Authenticate", `Basic realm="QTUN Protected Tunnel"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return

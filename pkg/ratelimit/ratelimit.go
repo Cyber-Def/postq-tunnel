@@ -80,3 +80,80 @@ func (rl *HandshakeLimiter) cleanup() {
 		rl.mu.Unlock()
 	}
 }
+
+// --- Basic Auth Lockout ---
+
+const (
+	// authFailWindow is the sliding window for counting failed auth attempts.
+	authFailWindow = 30 * time.Second
+	// authFailThreshold is the number of failures within the window that triggers lockout.
+	authFailThreshold = 20
+	// authLockoutDuration is how long a misbehaving IP is blocked after crossing the threshold.
+	authLockoutDuration = 1 * time.Minute
+)
+
+// authEntry tracks failed auth attempts and whether the IP is currently blocked.
+type authEntry struct {
+	failures  int
+	windowEnd time.Time
+	blockedUntil time.Time
+}
+
+// AuthFailLimiter blocks IPs that repeatedly fail Basic Auth challenges.
+type AuthFailLimiter struct {
+	mu      sync.Mutex
+	entries map[string]*authEntry
+}
+
+// NewAuthFailLimiter creates a new AuthFailLimiter and starts background cleanup.
+func NewAuthFailLimiter() *AuthFailLimiter {
+	al := &AuthFailLimiter{entries: make(map[string]*authEntry)}
+	go al.cleanup()
+	return al
+}
+
+// IsBlocked returns true if the given IP is currently locked out.
+func (al *AuthFailLimiter) IsBlocked(ip string) bool {
+	al.mu.Lock()
+	defer al.mu.Unlock()
+	e, ok := al.entries[ip]
+	if !ok {
+		return false
+	}
+	return time.Now().Before(e.blockedUntil)
+}
+
+// RecordFailure records a failed auth attempt for the given IP.
+// If the failure count crosses authFailThreshold within authFailWindow,
+// the IP is locked out for authLockoutDuration.
+func (al *AuthFailLimiter) RecordFailure(ip string) {
+	now := time.Now()
+	al.mu.Lock()
+	defer al.mu.Unlock()
+
+	e, ok := al.entries[ip]
+	if !ok || now.After(e.windowEnd) {
+		al.entries[ip] = &authEntry{failures: 1, windowEnd: now.Add(authFailWindow)}
+		return
+	}
+	e.failures++
+	if e.failures >= authFailThreshold {
+		e.blockedUntil = now.Add(authLockoutDuration)
+	}
+}
+
+// cleanup removes stale auth entries.
+func (al *AuthFailLimiter) cleanup() {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now()
+		al.mu.Lock()
+		for ip, e := range al.entries {
+			if now.After(e.windowEnd) && now.After(e.blockedUntil) {
+				delete(al.entries, ip)
+			}
+		}
+		al.mu.Unlock()
+	}
+}
