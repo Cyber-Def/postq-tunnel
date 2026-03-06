@@ -81,7 +81,7 @@ func RunTunnel(ctx context.Context, cfg *Config) error {
 	}
 
 	// Apply handshake timeout
-	handshakeStream.SetDeadline(time.Now().Add(10 * time.Second))
+	_ = handshakeStream.SetDeadline(time.Now().Add(10 * time.Second))
 
 	var cidrs []string
 	if cfg.AllowCIDRs != "" {
@@ -111,7 +111,7 @@ func RunTunnel(ctx context.Context, cfg *Config) error {
 	}
 	
 	// Reset deadline for normal operation
-	handshakeStream.SetDeadline(time.Time{})
+	_ = handshakeStream.SetDeadline(time.Time{})
 	handshakeStream.Close()
 
 	slog.Info("✅ Tunnel Established!", "url", resp.AssignedURL)

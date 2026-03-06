@@ -42,7 +42,11 @@ func main() {
 	metricsMux.HandleFunc("/readyz", metrics.ReadyzHandler)
 	
 	// Start metrics endpoint quietly on 9090
-	go http.ListenAndServe(":9090", metricsMux)
+	go func() {
+		if err := http.ListenAndServe(":9090", metricsMux); err != nil && err != http.ErrServerClosed {
+			slog.Error("Metrics server failed", "error", err)
+		}
+	}()
 
 	// 3. Graceful Shutdown Context
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -65,7 +69,7 @@ func main() {
 		
 		<-ctx.Done()
 		slog.Info("Shutting down Edge Server gracefully...")
-		srv.Shutdown(context.Background())
+		_ = srv.Shutdown(context.Background())
 		return
 	}
 
@@ -113,7 +117,7 @@ func startPQCListener(ctx context.Context, addr string, registry core.TunnelRegi
 
 func handleAgentConnection(ctx context.Context, conn net.Conn, registry core.TunnelRegistry) {
 	// Connection and handshake timeout (10 seconds)
-	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 
 	tlsConn, ok := conn.(*tls.Conn)
 	if !ok {
@@ -141,7 +145,7 @@ func handleAgentConnection(ctx context.Context, conn net.Conn, registry core.Tun
 	start := time.Now()
 	
 	// Stream handshake limit
-	stream.SetDeadline(time.Now().Add(5 * time.Second))
+	_ = stream.SetDeadline(time.Now().Add(5 * time.Second))
 	req, err := core.ReadHandshake(stream)
 	if err != nil {
 		session.Close()
@@ -151,8 +155,8 @@ func handleAgentConnection(ctx context.Context, conn net.Conn, registry core.Tun
 	metrics.ObserveHandshake(time.Since(start).Milliseconds())
 	
 	// Reset deadlines for multiplexed streams
-	stream.SetDeadline(time.Time{})
-	conn.SetDeadline(time.Time{})
+	_ = stream.SetDeadline(time.Time{})
+	_ = conn.SetDeadline(time.Time{})
 
 	err = registry.Register(req.Subdomain, session)
 	if err != nil {

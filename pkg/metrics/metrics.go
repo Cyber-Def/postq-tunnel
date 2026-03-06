@@ -81,20 +81,20 @@ qtun_network_errors_total %d
 // MetricsHandler serves Prometheus metrics
 func MetricsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(ProbeMetrics()))
+	_, _ = w.Write([]byte(ProbeMetrics()))
 }
 
 // HealthzHandler is used for liveness probes
 func HealthzHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
+	_, _ = w.Write([]byte("ok"))
 }
 
 // ReadyzHandler is used for readiness probes
 func ReadyzHandler(w http.ResponseWriter, r *http.Request) {
 	// Add logic if there's any readiness dependency, otherwise return ok
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ready"))
+	_, _ = w.Write([]byte("ready"))
 }
 
 // TrackedConn wraps a net.Conn to track I/O metrics
