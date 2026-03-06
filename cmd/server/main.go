@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -18,6 +17,7 @@ import (
 	"github.com/Cyber-Def/postq-tunnel/internal/server"
 	"github.com/Cyber-Def/postq-tunnel/internal/version"
 	"github.com/Cyber-Def/postq-tunnel/pkg/logger"
+	"github.com/Cyber-Def/postq-tunnel/pkg/metrics"
 	"github.com/Cyber-Def/postq-tunnel/pkg/tunnel"
 )
 
@@ -35,14 +35,11 @@ func main() {
 	registry := server.NewRegistry()
 	proxy := server.BuildProxy(registry)
 	
-	// 1. Prometheus Metrics tracking
+	// 1. Prometheus Metrics tracking and Health checks
 	metricsMux := http.NewServeMux()
-	metricsMux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprintf(w, "# HELP qtun_active_tunnels The total number of active agent tunnels.\n")
-		fmt.Fprintf(w, "# TYPE qtun_active_tunnels gauge\n")
-		fmt.Fprintf(w, "qtun_active_tunnels %d\n", registry.TunnelCount())
-	})
+	metricsMux.HandleFunc("/metrics", metrics.MetricsHandler)
+	metricsMux.HandleFunc("/healthz", metrics.HealthzHandler)
+	metricsMux.HandleFunc("/readyz", metrics.ReadyzHandler)
 	
 	// Start metrics endpoint quietly on 9090
 	go http.ListenAndServe(":9090", metricsMux)
@@ -141,6 +138,8 @@ func handleAgentConnection(ctx context.Context, conn net.Conn, registry core.Tun
 		return
 	}
 	
+	start := time.Now()
+	
 	// Stream handshake limit
 	stream.SetDeadline(time.Now().Add(5 * time.Second))
 	req, err := core.ReadHandshake(stream)
@@ -148,6 +147,8 @@ func handleAgentConnection(ctx context.Context, conn net.Conn, registry core.Tun
 		session.Close()
 		return
 	}
+	
+	metrics.ObserveHandshake(time.Since(start).Milliseconds())
 	
 	// Reset deadlines for multiplexed streams
 	stream.SetDeadline(time.Time{})
@@ -161,11 +162,13 @@ func handleAgentConnection(ctx context.Context, conn net.Conn, registry core.Tun
 	}
 	
 	_ = core.WriteHandshakeResp(stream, core.HandshakeResp{Success: true, AssignedURL: req.Subdomain})
+	metrics.AddActiveTunnel(1)
 	slog.Info("Subdomain Mounted", "subdomain", req.Subdomain, "active_tunnels", registry.TunnelCount())
 	
 	go func() {
 		<-session.CloseChan()
 		registry.Unregister(req.Subdomain)
+		metrics.AddActiveTunnel(-1)
 		slog.Info("Subdomain Unmounted", "subdomain", req.Subdomain, "active_tunnels", registry.TunnelCount())
 	}()
 }

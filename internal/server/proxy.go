@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Cyber-Def/postq-tunnel/internal/core"
+	"github.com/Cyber-Def/postq-tunnel/pkg/metrics"
 )
 
 // BuildProxy creates a standard ReverseProxy that overrides the Transport.
@@ -28,10 +29,11 @@ func BuildProxy(registry core.TunnelRegistry) *httputil.ReverseProxy {
 
 			stream, err := registry.OpenStream(subdomain)
 			if err != nil {
+				metrics.AddNetError()
 				slog.Error("Proxy Error", "subdomain", subdomain, "error", err)
 				return nil, err
 			}
-			return stream, nil
+			return &metrics.TrackedConn{Conn: stream}, nil
 		},
 	}
 
